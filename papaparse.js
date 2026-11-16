@@ -1565,8 +1565,10 @@ License: MIT
 							{
 								quoteSearch = input.indexOf(quoteChar, cursor);
 							}
-							nextDelim = input.indexOf(delim, cursor);
-							nextNewline = input.indexOf(newline, cursor);
+							if (nextDelim !== -1 && nextDelim < cursor)
+								nextDelim = input.indexOf(delim, cursor);
+							if (nextNewline !== -1 && nextNewline < cursor)
+								nextNewline = input.indexOf(newline, cursor);
 							break;
 						}
 
@@ -1577,7 +1579,9 @@ License: MIT
 						{
 							row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar));
 							saveRow(quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen);
-							nextDelim = input.indexOf(delim, cursor);	// because we may have skipped the nextDelim in the quoted field
+							// Only search again if we skipped a delimiter in the quoted field.
+							if (nextDelim !== -1 && nextDelim < cursor)
+								nextDelim = input.indexOf(delim, cursor);
 							quoteSearch = input.indexOf(quoteChar, cursor);	// we search for first quote in next line
 
 							if (stepIsFunction)
@@ -1618,7 +1622,8 @@ License: MIT
 						return returnable();
 					cursor = nextNewline + newlineLen;
 					nextNewline = input.indexOf(newline, cursor);
-					nextDelim = input.indexOf(delim, cursor);
+					if (nextDelim !== -1 && nextDelim < cursor)
+						nextDelim = input.indexOf(delim, cursor);
 					continue;
 				}
 
