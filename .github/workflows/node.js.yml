@@ -4,15 +4,18 @@
 name: Node.js CI
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: 'mocha --grep pattern for the node tests (empty = full suite)'
+        required: false
+        default: ''
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     strategy:
       matrix:
@@ -25,5 +28,31 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
+    - name: Allow Chromium user-namespace sandbox (Ubuntu 24.04 AppArmor)
+      run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     - run: npm install
-    - run: npm test
+    - name: Run puppeteer's Chromium 78 without its renderer seccomp filter (crashes on Ubuntu 24.04 glibc)
+      run: |
+        CHROME=$(ls -d "$PWD"/node_modules/puppeteer/.local-chromium/linux-*/chrome-linux/chrome)
+        printf '#!/bin/sh\nexec "%s" --disable-seccomp-filter-sandbox "$@"\n' "$CHROME" > "$RUNNER_TEMP/chrome-wrapper"
+        chmod +x "$RUNNER_TEMP/chrome-wrapper"
+        echo "PUPPETEER_EXECUTABLE_PATH=$RUNNER_TEMP/chrome-wrapper" >> "$GITHUB_ENV"
+    - run: |
+        if [ -n "${{ inputs.test-filter }}" ]; then
+          npx mocha tests/node-tests.js tests/test-cases.js --grep "${{ inputs.test-filter }}"
+        else
+          npm run test-node
+          echo "Pending tests in the test-node run above, with the reason each is skipped:"
+          awk '/description:/{d=$0} /disabled: !(XHR|FILES)_ENABLED/{sub(/^[ \t]*description: */,"",d); sub(/,[ \t]*$/,"",d); m=$0; sub(/^[ \t]*disabled: !/,"",m); sub(/,.*/,"",m); print "SKIPPED under Node (" m " is false outside a browser; runs in the headless-Chrome step): " d}' tests/test-cases.js
+          npm run test-mocha-headless-chrome
+        fi
+    - name: Pack
+      if: matrix.node-version == '14.x'
+      run: npm pack
+    - name: Upload tarball
+      if: matrix.node-version == '14.x'
+      uses: actions/upload-artifact@v4
+      with:
+        name: papaparse-tgz
+        path: papaparse-5.3.1.tgz
+        if-no-files-found: error

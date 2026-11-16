@@ -1,6 +1,13 @@
 language: node_js
+dist: xenial
 node_js:
   - "8"
   - "9"
   - "10"
   - "11"
+script:
+  - npm run test-node
+  - |
+    echo "Pending tests in the test-node run above, with the reason each is skipped:"
+    awk '/description:/{d=$0} /disabled: !(XHR|FILES)_ENABLED/{sub(/^[ \t]*description: */,"",d); sub(/,[ \t]*$/,"",d); m=$0; sub(/^[ \t]*disabled: !/,"",m); sub(/,.*/,"",m); print "SKIPPED under Node (" m " is false outside a browser; runs in the headless-Chrome step): " d}' tests/test-cases.js
+  - npm run test-mocha-headless-chrome
